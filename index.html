@@ -1,4 +1,6 @@
 
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,6 +77,13 @@
   /* Palette: fixed 8x2 (scaled) */
   #palettePanel{ margin-top:14px }
   .paletteRow{ display:grid; grid-template-columns:repeat(8, minmax(90px, 1fr)); gap:12px }
+ 
+  /* --- Portrait/narrow: arrange palette as 6 columns for all rows --- */
+@media (max-width: 900px) {
+  #paletteRow1 { grid-template-columns: repeat(6, minmax(90px, 1fr)); }
+  #paletteRow2 { grid-template-columns: repeat(6, minmax(90px, 1fr)); } /* keep tile width equal to row1 */
+  #paletteRow3 { grid-template-columns: repeat(6, minmax(90px, 1fr)); } /* left-align with same size */
+}
   .swatch{
     border-radius:12px; padding:8px;
     cursor:pointer; user-select:none; display:flex; flex-direction:column; gap:8px; align-items:center;
@@ -293,6 +302,40 @@ header h1{
 .icon { width: 22px; height: 22px; display: inline; }
 .icon.exit { display: none; }
 </style>
+<style id="responsive-overrides">
+  /* --- Responsive tweaks for narrow (portrait) screens --- */
+  @media (max-width: 900px) {
+    /* Use the panel itself as the flex container and virtually "unwrap" rows */
+    .panel { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; overflow-x: auto; }
+    .panel > .row:nth-child(1),
+    .panel > .row:nth-child(2) { display: contents; }
+
+    /* ---- Top line: Difficulty + Bars (keep them together; do NOT wrap Bars to a new line) ---- */
+    .panel .seg { order: 1; flex: 0 0 auto; } /* Beginner / Intermediate / Advanced */
+    .panel .label:has(+ #bars),
+    .panel #bars { order: 1; flex: 0 0 auto; white-space: nowrap; } /* "Bars" + select kept on same line */
+
+    /* ---- Force a line break before buttons/BPM using a pseudo flex item ---- */
+    .panel::before { content: ""; order: 2; flex-basis: 100%; width: 100%; }
+
+    /* ---- Buttons row ---- */
+    #btnNew, #btnPlay, #btnStop, #btnClear, #btnGrade { order: 3; flex: 0 0 auto; }
+
+    /* ---- BPM label + counter MUST sit to the right of Check on the same line ---- */
+    .panel .label:has(+ .counter),
+    .panel .counter {
+      order: 4;            /* appear after the buttons (including Check) */
+      flex: 0 0 auto;      /* prevent stretching that created a long white area */
+      min-width: 0;        /* no unexpected width reservation */
+    }
+
+    /* Systems grid: 2 columns in portrait/narrow, so Bar1/2 side-by-side, Bar3/4 wrap to next line */
+    #systems { grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: calc(var(--gap-bar) * 0.75); }
+
+    /* Tighten bar internals: reduce padding and gap for smaller bars, but keep alignment */
+    .bar { padding: clamp(4px, 0.4vw, 8px); gap: calc(var(--gap-beat) * 0.75); }
+  }
+</style>
 </head>
 <body>
 <div id="appScaleViewport">
@@ -323,7 +366,6 @@ header h1{
               <button class="btn" id="bpmPlus15"  type="button">+15</button>
             </div>
 
-            <div class="hint">Click a bar title to audition that bar • Arrow keys move palette • Enter inserts • Backspace deletes</div>
           </div>
 
           <div class="row">
@@ -340,6 +382,7 @@ header h1{
         <section id="palettePanel">
           <div class="paletteRow" id="paletteRow1"></div>
           <div class="paletteRow" id="paletteRow2" style="margin-top:12px;"></div>
+          <div class="paletteRow" id="paletteRow3" style="margin-top:12px;"></div>
         </section>
       </main>
     </div>
@@ -802,6 +845,88 @@ header h1{
   document.addEventListener('fullscreenchange', updateUI);
   document.addEventListener('webkitfullscreenchange', updateUI);
   updateUI();
+})();
+</script>
+<script>
+(function() {
+  const ROW1_ID = 'paletteRow1';
+  const ROW2_ID = 'paletteRow2';
+  const ROW3_ID = 'paletteRow3';
+  const mq = window.matchMedia('(max-width: 900px)');
+
+  function arr(parent){ return Array.from(parent ? parent.children : []); }
+  function moveAll(nodes, target){ nodes.forEach(n => target.appendChild(n)); }
+
+  function layoutPortrait(){
+    const r1 = document.getElementById(ROW1_ID);
+    const r2 = document.getElementById(ROW2_ID);
+    const r3 = document.getElementById(ROW3_ID);
+    if(!r1 || !r2 || !r3) return;
+
+    const all = [...arr(r1), ...arr(r2), ...arr(r3)];
+    if(all.length === 0) return;
+
+    r1.textContent = '';
+    r2.textContent = '';
+    r3.textContent = '';
+
+    const take = (list,n)=>list.splice(0, Math.max(0, Math.min(n, list.length)));
+    const list = all.slice();
+    moveAll(take(list, 6), r1);   // 6
+    moveAll(take(list, 5), r2);   // 5
+    moveAll(take(list, 5), r3);   // 5
+    moveAll(list, r3);            // 남는 건 3행에
+  }
+
+  function layoutDesktop(){
+    const r1 = document.getElementById(ROW1_ID);
+    const r2 = document.getElementById(ROW2_ID);
+    const r3 = document.getElementById(ROW3_ID);
+    if(!r1 || !r2) return;
+
+    const all = [...arr(r1), ...arr(r2), ...arr(r3)];
+    if(all.length === 0) return;
+
+    r1.textContent = '';
+    r2.textContent = '';
+    if(r3) r3.textContent = '';
+
+    const take = (list,n)=>list.splice(0, Math.max(0, Math.min(n, list.length)));
+    const list = all.slice();
+    moveAll(take(list, 8), r1);   // 8
+    moveAll(list, r2);            // 나머지(보통 8)
+  }
+
+  function relayout(){
+    if(mq.matches) layoutPortrait();
+    else layoutDesktop();
+  }
+
+  function whenReady(){
+    const r1 = document.getElementById(ROW1_ID);
+    const r2 = document.getElementById(ROW2_ID);
+    if(!r1 || !r2) return;
+
+    // 타일이 늦게 채워지는 경우 감시 후 1회 배치
+    const obs = new MutationObserver(() => {
+      const count = r1.children.length + r2.children.length;
+      if(count > 0){
+        obs.disconnect();
+        relayout();
+      }
+    });
+    obs.observe(r1, { childList: true });
+    obs.observe(r2, { childList: true });
+
+    // 초기 시도
+    setTimeout(relayout, 0);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    whenReady();
+    (mq.addEventListener ? mq.addEventListener('change', relayout) : mq.addListener(relayout));
+    window.addEventListener('resize', relayout);
+  });
 })();
 </script>
 </body>
